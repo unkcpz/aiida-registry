@@ -1,21 +1,18 @@
----
-# Updates web page on pushes to `master` as well as daily
-name: webpage
+name: Deploy PR previews
 
 on:
-  schedule:
-  # See https://help.github.com/en/actions/automating-your-workflow-with-github-actions/events-that-trigger-workflows#scheduled-events-schedule
-  # run every day at 21:00 UTC
-  - cron: "0 21 * * *"
-  push:
-    branches:
-    - master
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - closed
+
+concurrency: preview-${{ github.ref }}
 
 jobs:
-  webpage:
-    if: github.repository == 'aiidateam/aiida-registry'
-
-    runs-on: ubuntu-latest
+  deploy-preview:
+    runs-on: ubuntu-20.04
     env:
       COMMIT_AUTHOR: Deploy Action
       COMMIT_AUTHOR_EMAIL: action@github.com
@@ -37,28 +34,26 @@ jobs:
       run: aiida-registry fetch
     - name: Get entry points data
       run: aiida-registry test-install
-    - name: Commit json file
+    - name: Move JSON file to the React project
       run: |
         mv plugins_metadata.json aiida-registry-app/src/
-        git config --local user.email "actions@github.com"
-        git config --local user.name "GitHub Actions"
-        git add aiida-registry-app/src/plugins_metadata.json
-        git commit -m "Add plugins data"
-        git push -f origin HEAD:master
     - uses: actions/setup-node@v3
       with:
         node-version: '18.x'
     - name: Install npm dependencies and build
       run: |
         npm install
+        export VITE_PR_PREVIEW_PATH="/aiida-registry/pr-preview/pr-${{ github.event.number }}/"
         npm run build
       working-directory: ./aiida-registry-app
     - name: Add plugins_metadata.json to the build folder
       run: cp ./aiida-registry-app/src/plugins_metadata.json ./aiida-registry-app/dist
 
-    - name: Deploy
-      uses: peaceiris/actions-gh-pages@v3
+    - name: Deploy preview
+      uses: rossjrw/pr-preview-action@v1
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./aiida-registry-app/dist
-        keep_files: true
+        source-dir: ./aiida-registry-app/dist
+        preview-branch: gh-pages
+        umbrella-dir: pr-preview
+        action: auto
+        custom-url:

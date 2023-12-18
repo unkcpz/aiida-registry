@@ -82,7 +82,6 @@ jobs:
 
   preview:
     # This job is triggered by (only) a PR.
-    if: github.event_name == 'pull_request'
     needs: [test-webpage-build]
     runs-on: ubuntu-latest
     strategy:
